@@ -8,6 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/couchbase/gocbcorex/testutils"
+	"go.uber.org/zap"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -188,4 +191,37 @@ func TestKvClientPoolNewAndGetRace(t *testing.T) {
 
 	_, err = pool.GetClient(context.Background())
 	require.ErrorIs(t, err, expectedErr)
+}
+
+func TestKvClientPoolGetClientIntegration(t *testing.T) {
+	testutils.SkipIfShortTest(t)
+
+	auth := &PasswordAuthenticator{
+		Username: testutils.TestOpts.Username,
+		Password: testutils.TestOpts.Password,
+	}
+	clientConfig := KvClientConfig{
+		Address:        testutils.TestOpts.MemdAddrs[0],
+		TlsConfig:      nil,
+		SelectedBucket: testutils.TestOpts.BucketName,
+		Authenticator:  auth,
+	}
+
+	logger, err := zap.NewDevelopment()
+	require.NoError(t, err)
+
+	pool, err := NewKvClientPool(&KvClientPoolConfig{
+		NumConnections: 5,
+		ClientConfig:   clientConfig,
+	}, &KvClientPoolOptions{
+		Logger: logger,
+	})
+	require.NoError(t, err)
+
+	// This is done twice to test different codepaths, this is maybe testing implementation detail a bit.
+	_, err = pool.GetClient(context.Background())
+	require.NoError(t, err)
+
+	_, err = pool.GetClient(context.Background())
+	require.NoError(t, err)
 }
